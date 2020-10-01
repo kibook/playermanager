@@ -42,7 +42,7 @@ AddEventHandler('playerConnecting', function(name, setKickReason, deferrals)
 end)
 
 AddEventHandler('playerDropped', function(reason)
-	print(string.format('Dropped: %s [%s] [%s] (%s)', GetPlayerName(source), GetIdentifier(soure, 'license'), GetPlayerEndpoint(source), reason))
+	print(string.format('Dropped: %s [%s] (%s)', GetPlayerName(source), GetPlayerEndpoint(source), reason))
 end)
 
 function GetPlayerId(id)
