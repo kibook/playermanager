@@ -16,7 +16,7 @@ AddEventHandler('playerConnecting', function(name, setKickReason, deferrals)
 	local player = source
 	local license = GetIdentifier(player, 'license')
 
-	print(string.format('Connecting: %s [%s] [%s]', name, license, GetPlayerEndpoint(player)))
+	print(string.format('Connecting: %s %s %s', name, license, GetPlayerEndpoint(player)))
 
 	deferrals.defer()
 
@@ -42,7 +42,7 @@ AddEventHandler('playerConnecting', function(name, setKickReason, deferrals)
 end)
 
 AddEventHandler('playerDropped', function(reason)
-	print(string.format('Dropped: %s [%s] (%s)', GetPlayerName(source), GetPlayerEndpoint(source), reason))
+	print(string.format('Dropped: %s %s (%s)', GetPlayerName(source), GetPlayerEndpoint(source), reason))
 end)
 
 function GetPlayerId(id)
