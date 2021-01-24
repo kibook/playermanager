@@ -1,3 +1,5 @@
+RegisterNetEvent('playermanager:pong')
+
 function GetIdentifier(id, kind)
 	local identifiers = {}
 
@@ -11,39 +13,6 @@ function GetIdentifier(id, kind)
 
 	return nil
 end
-
-AddEventHandler('playerConnecting', function(name, setKickReason, deferrals)
-	local player = source
-	local license = GetIdentifier(player, 'license')
-
-	print(string.format('Connecting: %s %s %s', name, license, GetPlayerEndpoint(player)))
-
-	deferrals.defer()
-
-	Wait(0)
-
-	deferrals.update('Checking bans...')
-
-	MySQL.ready(function()
-		MySQL.Async.fetchScalar('SELECT reason FROM ban WHERE id = @id',
-		{
-			['@id'] = license
-		},
-		function(banReason)
-			Wait(0)
-
-			if banReason then
-				deferrals.done(string.format('Banned: %s', banReason))
-			else
-				deferrals.done()
-			end
-		end)
-	end)
-end)
-
-AddEventHandler('playerDropped', function(reason)
-	print(string.format('Dropped: %s %s (%s)', GetPlayerName(source), GetPlayerEndpoint(source), reason))
-end)
 
 function GetPlayerId(id)
 	local players = GetPlayers()
@@ -90,6 +59,43 @@ function StoreBanReason(license, reason)
 		end)
 
 end
+
+AddEventHandler('playerConnecting', function(name, setKickReason, deferrals)
+	local player = source
+	local license = GetIdentifier(player, 'license')
+
+	print(string.format('Connecting: %s %s %s', name, license, GetPlayerEndpoint(player)))
+
+	deferrals.defer()
+
+	Wait(0)
+
+	deferrals.update('Checking bans...')
+
+	MySQL.ready(function()
+		MySQL.Async.fetchScalar('SELECT reason FROM ban WHERE id = @id',
+		{
+			['@id'] = license
+		},
+		function(banReason)
+			Wait(0)
+
+			if banReason then
+				deferrals.done(string.format('Banned: %s', banReason))
+			else
+				deferrals.done()
+			end
+		end)
+	end)
+end)
+
+AddEventHandler('playerDropped', function(reason)
+	print(string.format('Dropped: %s %s (%s)', GetPlayerName(source), GetPlayerEndpoint(source), reason))
+end)
+
+AddEventHandler('playermanager:pong', function()
+	print('Received pong from ' .. source)
+end)
 
 RegisterCommand('ban', function(source, args, user)
 	if #args < 2 then
@@ -142,5 +148,12 @@ end, true)
 RegisterCommand('status', function(source, args, user)
 	for _, id in ipairs(GetPlayers()) do
 		print(string.format('[%d] %s %s %s', id, GetPlayerName(id), GetIdentifier(id, 'license'), GetPlayerEndpoint(id)))
+	end
+end, true)
+
+RegisterCommand('ping', function(source, args, raw)
+	for _, player in ipairs(GetPlayers()) do
+		TriggerClientEvent('playermanager:ping', player)
+		print('Sent ping to ' .. player)
 	end
 end, true)
