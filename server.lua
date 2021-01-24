@@ -152,7 +152,19 @@ RegisterCommand('status', function(source, args, user)
 end, true)
 
 RegisterCommand('ping', function(source, args, raw)
-	for _, player in ipairs(GetPlayers()) do
+	local players
+
+	if #args > 0 then
+		players = {}
+
+		for _, arg in ipairs(args) do
+			table.insert(players, tonumber(arg))
+		end
+	else
+		players = GetPlayers()
+	end
+
+	for _, player in ipairs(players) do
 		TriggerClientEvent('playermanager:ping', player)
 		print('Sent ping to ' .. player)
 	end
