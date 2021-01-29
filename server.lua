@@ -99,6 +99,7 @@ end)
 
 RegisterCommand('ban', function(source, args, user)
 	if #args < 2 then
+		print('You must specify a player and a reason')
 		return
 	end
 
@@ -120,6 +121,7 @@ end, true)
 
 RegisterCommand('kick', function(source, args, user)
 	if #args < 2 then
+		print('You must specify a player and reason')
 		return
 	end
 
@@ -128,11 +130,14 @@ RegisterCommand('kick', function(source, args, user)
 
 	if id then
 		DropPlayer(id, 'Kicked: ' .. reason)
+	else
+		print('No player with name or ID: ' .. args[1])
 	end
 end, true)
 
 RegisterCommand('unban', function(source, args, user)
 	if #args < 1 then
+		print('You must specify a license to unban')
 		return
 	end
 
@@ -165,7 +170,13 @@ RegisterCommand('ping', function(source, args, raw)
 	end
 
 	for _, player in ipairs(players) do
-		TriggerClientEvent('playermanager:ping', player)
-		print('Sent ping to ' .. player)
+		local id = GetPlayerId(player)
+
+		if id then
+			TriggerClientEvent('playermanager:ping', id)
+			print('Sent ping to ' .. player)
+		else
+			print('No splayer with name or ID: ' .. player)
+		end
 	end
 end, true)
