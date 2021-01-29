@@ -135,6 +135,19 @@ RegisterCommand('kick', function(source, args, user)
 	end
 end, true)
 
+RegisterCommand('kickall', function(source, args, raw)
+	if #args < 1 then
+		print('You must specify a reason')
+		return
+	end
+
+	local reason = args[1]
+
+	for _, player in ipairs(GetPlayers()) do
+		DropPlayer(player, 'Kicked: ' .. reason)
+	end
+end, true)
+
 RegisterCommand('unban', function(source, args, user)
 	if #args < 1 then
 		print('You must specify a license to unban')
@@ -147,6 +160,18 @@ RegisterCommand('unban', function(source, args, user)
 		MySQL.Async.execute('DELETE FROM ban WHERE id = @id', {
 			['@id'] = license
 		})
+	end)
+end, true)
+
+RegisterCommand('listbans', function(source, args, raw)
+	MySQL.ready(function()
+		MySQL.Async.fetchAll('SELECT id, reason FROM ban', {}, function(results)
+			if results then
+				for _, ban in ipairs(results) do
+					print(ban.id, ban.reason)
+				end
+			end
+		end)
 	end)
 end, true)
 
