@@ -1,13 +1,11 @@
 RegisterNetEvent("playermanager:pong")
 
 function GetIdentifier(id, kind)
-	local identifiers = {}
+	local prefix = kind .. ":"
 
 	for _, identifier in ipairs(GetPlayerIdentifiers(id)) do
-		local prefix = kind .. ":"
-		local len = string.len(prefix)
-		if string.sub(identifier, 1, len) == prefix then
-			return string.sub(identifier, len + 1)
+		if string.sub(identifier, 1, #prefix) == prefix then
+			return identifier
 		end
 	end
 
@@ -24,9 +22,9 @@ function GetPlayerId(id)
 	end
 
 	id = string.lower(id)
+
 	for _, playerId in ipairs(players) do
-		local playerName = string.lower(GetPlayerName(playerId))
-		if playerName == id then
+		if string.lower(GetPlayerName(playerId)) == id then
 			return tonumber(playerId)
 		end
 	end
@@ -198,8 +196,8 @@ RegisterCommand("listbans", function(source, args, raw)
 end, true)
 
 RegisterCommand("status", function(source, args, user)
-	for _, id in ipairs(GetPlayers()) do
-		print(string.format("[%d] %s %s %s", id, GetPlayerName(id), GetIdentifier(id, "license"), GetPlayerEndpoint(id)))
+	for _, id in ipairs(GetPlayersFromArgs(args)) do
+		print(string.format("[%d] %s %s %s %d", id, GetPlayerName(id), GetIdentifier(id, "license"), GetPlayerEndpoint(id), GetPlayerPing(id)))
 	end
 end, true)
 

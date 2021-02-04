@@ -1,5 +1,3 @@
-local JailPosition
-
 RegisterNetEvent("playermanager:ping")
 RegisterNetEvent("playermanager:spectate")
 RegisterNetEvent("playermanager:summon")
