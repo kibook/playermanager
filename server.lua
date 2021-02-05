@@ -58,6 +58,33 @@ function StoreBanReason(license, reason)
 
 end
 
+function StoreTempBanReason(license, reason, expires)
+	MySQL.Async.fetchScalar(
+		"SELECT id FROM ban WHERE id = @id",
+		{
+			["id"] = license
+		},
+		function(id)
+			if id then
+				MySQL.Async.execute(
+					"UPDATE ban SET reason = @reason, expires = @expires WHERE id = @id",
+					{
+						["reason"] = reason,
+						["expires"] = expires,
+						["id"] = id
+					})
+			else
+				MySQL.Async.execute(
+					"INSERT INTO ban (id, reason, expires) VALUES (@id, @reason, @expires)",
+					{
+						["id"] = license,
+						["reason"] = reason,
+						["expires"] = expires
+					})
+			end
+		end)
+end
+
 function GetPlayersFromArgs(args)
 	local players
 
@@ -80,6 +107,10 @@ function GetPlayersFromArgs(args)
 	return players
 end
 
+function ClearExpiredBans()
+	MySQL.Async.execute("DELETE FROM ban WHERE expires < NOW()")
+end
+
 AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 	local player = source
 	local license = GetIdentifier(player, "license")
@@ -93,16 +124,28 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 	deferrals.update("Checking bans...")
 
 	MySQL.ready(function()
-		MySQL.Async.fetchScalar("SELECT reason FROM ban WHERE id = @id",
+		MySQL.Async.fetchAll("SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban WHERE id = @id",
 		{
 			["id"] = license
 		},
-		function(banReason)
+		function(results)
 			Wait(0)
 
-			if banReason then
-				deferrals.done(string.format("Banned: %s", banReason))
-				print(string.format("Banned: %s %s: %s", name, license, banReason))
+			if results and results[1] then
+				local banReason = results[1].reason
+				local expires = results[1].expires
+
+				local message
+
+				if expires then
+					message = string.format("Banned until %s: %s", expires, banReason)
+				else
+					message = string.format("Banned: %s", banReason)
+				end
+
+				deferrals.done(message)
+
+				print(message)
 			else
 				deferrals.done()
 			end
@@ -118,14 +161,18 @@ AddEventHandler("playermanager:pong", function()
 	print("Received pong from " .. source)
 end)
 
-RegisterCommand("ban", function(source, args, user)
+RegisterCommand("ban", function(source, args, raw)
 	if #args < 2 then
-		print("You must specify a player and a reason")
+		print("Usage: ban <player> <reason>")
 		return
 	end
 
-	local id = GetPlayerId(args[1])
-	local reason = args[2]
+	local ref = args[1]
+
+	local id = GetPlayerId(ref)
+
+	table.remove(args, 1)
+	local reason = table.concat(args, " ")
 
 	if id then
 		local license = GetIdentifier(id, "license")
@@ -135,24 +182,56 @@ RegisterCommand("ban", function(source, args, user)
 		DropPlayer(id, "Banned: " .. reason)
 	else
 		MySQL.ready(function()
-			StoreBanReason(args[1], reason)
+			StoreBanReason(ref, reason)
 		end)
 	end
 end, true)
 
-RegisterCommand("kick", function(source, args, user)
+RegisterCommand("tempban", function(source, args, raw)
+	if #args < 3 then
+		print("Usage: ban <player> <expires> <reason>")
+		return
+	end
+
+	local ref = args[1]
+	local expires = args[2]
+
+	local id = GetPlayerId(ref)
+
+	table.remove(args, 1)
+	table.remove(args, 1)
+	local reason = table.concat(args, " ")
+
+	if id then
+		local license = GetIdentifier(id, "license")
+		MySQL.ready(function()
+			StoreTempBanReason(license, reason, expires)
+		end)
+		DropPlayer(id, "Banned until " .. expires .. ": " .. reason)
+	else
+		MySQL.ready(function()
+			StoreTempBanReason(ref, reason, expires)
+		end)
+	end
+end, true)
+
+RegisterCommand("kick", function(source, args, raw)
 	if #args < 2 then
 		print("You must specify a player and reason")
 		return
 	end
 
-	local id = GetPlayerId(args[1])
-	local reason = args[2]
+	local ref = args[1]
+
+	table.remove(args, 1)
+	local reason = table.concat(args, " ")
+
+	local id = GetPlayerId(ref)
 
 	if id then
 		DropPlayer(id, "Kicked: " .. reason)
 	else
-		print("No player with name or ID: " .. args[1])
+		print("No player with name or ID: " .. ref)
 	end
 end, true)
 
@@ -169,7 +248,7 @@ RegisterCommand("kickall", function(source, args, raw)
 	end
 end, true)
 
-RegisterCommand("unban", function(source, args, user)
+RegisterCommand("unban", function(source, args, raw)
 	if #args < 1 then
 		print("You must specify a license to unban")
 		return
@@ -186,17 +265,17 @@ end, true)
 
 RegisterCommand("listbans", function(source, args, raw)
 	MySQL.ready(function()
-		MySQL.Async.fetchAll("SELECT id, reason FROM ban", {}, function(results)
+		MySQL.Async.fetchAll("SELECT id, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban", {}, function(results)
 			if results then
 				for _, ban in ipairs(results) do
-					print(ban.id, ban.reason)
+					print(ban.id, ban.expires, ban.reason)
 				end
 			end
 		end)
 	end)
 end, true)
 
-RegisterCommand("status", function(source, args, user)
+RegisterCommand("status", function(source, args, raw)
 	for _, id in ipairs(GetPlayersFromArgs(args)) do
 		print(string.format("[%d] %s %s %s %d", id, GetPlayerName(id), GetIdentifier(id, "license"), GetPlayerEndpoint(id), GetPlayerPing(id)))
 	end
@@ -230,3 +309,10 @@ RegisterCommand("summon", function(source, args, raw)
 		end
 	end
 end, true)
+
+CreateThread(function()
+	while true do
+		ClearExpiredBans()
+		Wait(30000)
+	end
+end)

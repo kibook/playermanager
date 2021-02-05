@@ -19,16 +19,13 @@ AddEventHandler("playermanager:summon", function(serverId)
 end)
 
 CreateThread(function()
-	TriggerEvent("chat:addSuggestion", "/kick", "Kick a player", {
-		{name = "player", help = "Player name or ID"},
-		{name = "reason", help = "Reason for kicking"}
-	})
 	TriggerEvent("chat:addSuggestion", "/ban", "Ban a player", {
 		{name = "player", help = "Player name or ID"},
 		{name = "reason", help = "Reason for banning"}
 	})
-	TriggerEvent("chat:addSuggestion", "/unban", "Unban a player", {
-		{name = "license", help = "The license identifier of the player to unban"}
+	TriggerEvent("chat:addSuggestion", "/kick", "Kick a player", {
+		{name = "player", help = "Player name or ID"},
+		{name = "reason", help = "Reason for kicking"}
 	})
 	TriggerEvent("chat:addSuggestion", "/ping", "Test player connections", {
 		{name = "player", help = "Player name or ID. Multiple can be specified. Omit to ping all players."}
@@ -39,5 +36,13 @@ CreateThread(function()
 	TriggerEvent("chat:addSuggestion", "/status", "Show connected players", {})
 	TriggerEvent("chat:addSuggestion", "/summon", "Summon a player to your position", {
 		{name = "player", help = "Player name or ID. Multiple can be specified. Omit to summon all players."}
+	})
+	TriggerEvent("chat:addSuggestion", "/tempban", "Temporarily ban a player", {
+		{name = "player", help = "Player name or ID"},
+		{name = "until", help = "Date when ban expires, in the form of yyyy-mm-dd hh:mm:ss"},
+		{name = "reason", help = "Reason for banning"}
+	})
+	TriggerEvent("chat:addSuggestion", "/unban", "Unban a player", {
+		{name = "license", help = "The license identifier of the player to unban"}
 	})
 end)
