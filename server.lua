@@ -36,22 +36,22 @@ function StoreBanReason(license, reason)
 	MySQL.Async.fetchScalar(
 		"SELECT id FROM ban WHERE id = @id",
 		{
-			["@id"] = license
+			["id"] = license
 		},
 		function(id)
 			if id then
 				MySQL.Async.execute(
 					"UPDATE ban SET reason = @reason WHERE id = @id",
 					{
-						["@reason"] = reason,
-						["@id"] = id
+						["reason"] = reason,
+						["id"] = id
 					})
 			else
 				MySQL.Async.execute(
 					"INSERT INTO ban (id, reason) VALUES (@id, @reason)",
 					{
-						["@id"] = license,
-						["@reason"] = reason
+						["id"] = license,
+						["reason"] = reason
 					})
 			end
 		end)
@@ -95,13 +95,14 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 	MySQL.ready(function()
 		MySQL.Async.fetchScalar("SELECT reason FROM ban WHERE id = @id",
 		{
-			["@id"] = license
+			["id"] = license
 		},
 		function(banReason)
 			Wait(0)
 
 			if banReason then
 				deferrals.done(string.format("Banned: %s", banReason))
+				print(string.format("Banned: %s %s: %s", name, license, banReason))
 			else
 				deferrals.done()
 			end
