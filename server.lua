@@ -33,21 +33,21 @@ function GetPlayerId(id)
 end
 
 function StoreBanReason(license, reason)
-	MySQL.Async.fetchScalar(
+	exports.ghmattimysql:scalar(
 		"SELECT id FROM ban WHERE id = @id",
 		{
 			["id"] = license
 		},
 		function(id)
 			if id then
-				MySQL.Async.execute(
+				exports.ghmattimysql:execute(
 					"UPDATE ban SET reason = @reason WHERE id = @id",
 					{
 						["reason"] = reason,
 						["id"] = id
 					})
 			else
-				MySQL.Async.execute(
+				exports.ghmattimysql:execute(
 					"INSERT INTO ban (id, reason) VALUES (@id, @reason)",
 					{
 						["id"] = license,
@@ -55,18 +55,17 @@ function StoreBanReason(license, reason)
 					})
 			end
 		end)
-
 end
 
 function StoreTempBanReason(license, reason, expires)
-	MySQL.Async.fetchScalar(
+	exports.ghmattimysql:scalar(
 		"SELECT id FROM ban WHERE id = @id",
 		{
 			["id"] = license
 		},
 		function(id)
 			if id then
-				MySQL.Async.execute(
+				exports.ghmattimysql:execute(
 					"UPDATE ban SET reason = @reason, expires = @expires WHERE id = @id",
 					{
 						["reason"] = reason,
@@ -74,7 +73,7 @@ function StoreTempBanReason(license, reason, expires)
 						["id"] = id
 					})
 			else
-				MySQL.Async.execute(
+				exports.ghmattimysql:execute(
 					"INSERT INTO ban (id, reason, expires) VALUES (@id, @reason, @expires)",
 					{
 						["id"] = license,
@@ -108,7 +107,7 @@ function GetPlayersFromArgs(args)
 end
 
 function ClearExpiredBans()
-	MySQL.Async.execute("DELETE FROM ban WHERE expires < NOW()")
+	exports.ghmattimysql:execute("DELETE FROM ban WHERE expires < NOW()")
 end
 
 AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
@@ -123,8 +122,8 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 
 	deferrals.update("Checking bans...")
 
-	MySQL.ready(function()
-		MySQL.Async.fetchAll("SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban WHERE id = @id",
+	exports.ghmattimysql:execute(
+		"SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban WHERE id = @id",
 		{
 			["id"] = license
 		},
@@ -150,7 +149,6 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 				deferrals.done()
 			end
 		end)
-	end)
 end)
 
 AddEventHandler("playerDropped", function(reason)
@@ -176,14 +174,10 @@ RegisterCommand("ban", function(source, args, raw)
 
 	if id then
 		local license = GetIdentifier(id, "license")
-		MySQL.ready(function()
-			StoreBanReason(license, reason)
-		end)
+		StoreBanReason(license, reason)
 		DropPlayer(id, "Banned: " .. reason)
 	else
-		MySQL.ready(function()
-			StoreBanReason(ref, reason)
-		end)
+		StoreBanReason(ref, reason)
 	end
 end, true)
 
@@ -204,14 +198,10 @@ RegisterCommand("tempban", function(source, args, raw)
 
 	if id then
 		local license = GetIdentifier(id, "license")
-		MySQL.ready(function()
-			StoreTempBanReason(license, reason, expires)
-		end)
+		StoreTempBanReason(license, reason, expires)
 		DropPlayer(id, "Banned until " .. expires .. ": " .. reason)
 	else
-		MySQL.ready(function()
-			StoreTempBanReason(ref, reason, expires)
-		end)
+		StoreTempBanReason(ref, reason, expires)
 	end
 end, true)
 
@@ -256,22 +246,18 @@ RegisterCommand("unban", function(source, args, raw)
 
 	local license = args[1]
 
-	MySQL.ready(function()
-		MySQL.Async.execute("DELETE FROM ban WHERE id = @id", {
-			["@id"] = license
-		})
-	end)
+	exports.ghmattimysql:execute("DELETE FROM ban WHERE id = @id", {
+		["id"] = license
+	})
 end, true)
 
 RegisterCommand("listbans", function(source, args, raw)
-	MySQL.ready(function()
-		MySQL.Async.fetchAll("SELECT id, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban", {}, function(results)
-			if results then
-				for _, ban in ipairs(results) do
-					print(ban.id, ban.expires, ban.reason)
-				end
+	exports.ghmattimysql:execute("SELECT id, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban", {}, function(results)
+		if results then
+			for _, ban in ipairs(results) do
+				print(ban.id, ban.expires, ban.reason)
 			end
-		end)
+		end
 	end)
 end, true)
 
