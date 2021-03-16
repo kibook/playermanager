@@ -110,11 +110,16 @@ function ClearExpiredBans()
 	exports.ghmattimysql:execute("DELETE FROM ban WHERE expires < NOW()")
 end
 
+function Log(format, ...)
+	print(string.format("[%s] " .. format, os.date("%Y-%m-%dT%H:%M:%S"), ...))
+end
+
 AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 	local player = source
 	local license = GetIdentifier(player, "license")
+	local ip = GetPlayerEndpoint(player)
 
-	print(string.format("Connecting: %s %s %s", name, license, GetPlayerEndpoint(player)))
+	Log("Connecting: %s %s %s", name, license, ip)
 
 	deferrals.defer()
 
@@ -144,7 +149,7 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 
 				deferrals.done(message)
 
-				print(message)
+				Log(message)
 			else
 				deferrals.done()
 			end
@@ -152,11 +157,11 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 end)
 
 AddEventHandler("playerDropped", function(reason)
-	print(string.format("Dropped: %s %s (%s)", GetPlayerName(source), GetPlayerEndpoint(source), reason))
+	Log("Dropped: %s %s (%s)", GetPlayerName(source), GetPlayerEndpoint(source), reason)
 end)
 
 AddEventHandler("playermanager:pong", function()
-	print("Received pong from " .. source)
+	Log("Received pong from " .. source)
 end)
 
 RegisterCommand("ban", function(source, args, raw)
