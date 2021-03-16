@@ -33,7 +33,7 @@ CreateThread(function()
 	TriggerEvent("chat:addSuggestion", "/spectate", "Spectate a player", {
 		{name = "player", help = "Player name or ID"}
 	})
-	TriggerEvent("chat:addSuggestion", "/status", "Show connected players", {})
+	TriggerEvent("chat:addSuggestion", "/status", "Show connected players")
 	TriggerEvent("chat:addSuggestion", "/summon", "Summon a player to your position", {
 		{name = "player", help = "Player name or ID. Multiple can be specified. Omit to summon all players."}
 	})
