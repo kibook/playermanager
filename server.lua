@@ -32,7 +32,7 @@ function GetPlayerId(id)
 	return nil
 end
 
-function StoreBanReason(license, reason)
+function StoreBanReason(license, name, reason)
 	exports.ghmattimysql:scalar(
 		"SELECT id FROM ban WHERE id = @id",
 		{
@@ -48,16 +48,17 @@ function StoreBanReason(license, reason)
 					})
 			else
 				exports.ghmattimysql:execute(
-					"INSERT INTO ban (id, reason) VALUES (@id, @reason)",
+					"INSERT INTO ban (id, name, reason) VALUES (@id, @reason)",
 					{
 						["id"] = license,
+						["name"] = name,
 						["reason"] = reason
 					})
 			end
 		end)
 end
 
-function StoreTempBanReason(license, reason, expires)
+function StoreTempBanReason(license, name, reason, expires)
 	exports.ghmattimysql:scalar(
 		"SELECT id FROM ban WHERE id = @id",
 		{
@@ -74,9 +75,10 @@ function StoreTempBanReason(license, reason, expires)
 					})
 			else
 				exports.ghmattimysql:execute(
-					"INSERT INTO ban (id, reason, expires) VALUES (@id, @reason, @expires)",
+					"INSERT INTO ban (id, name, reason, expires) VALUES (@id, @reason, @expires)",
 					{
 						["id"] = license,
+						["name"] = name,
 						["reason"] = reason,
 						["expires"] = expires
 					})
@@ -179,10 +181,13 @@ RegisterCommand("ban", function(source, args, raw)
 
 	if id then
 		local license = GetIdentifier(id, "license")
-		StoreBanReason(license, reason)
+		local name = GetPlayerName(id)
+
+		StoreBanReason(license, name, reason)
+
 		DropPlayer(id, "Banned: " .. reason)
 	else
-		StoreBanReason(ref, reason)
+		StoreBanReason(ref, "", reason)
 	end
 end, true)
 
@@ -203,10 +208,13 @@ RegisterCommand("tempban", function(source, args, raw)
 
 	if id then
 		local license = GetIdentifier(id, "license")
-		StoreTempBanReason(license, reason, expires)
+		local name = GetPlayerName(id)
+
+		StoreTempBanReason(license, name, reason, expires)
+
 		DropPlayer(id, "Banned until " .. expires .. ": " .. reason)
 	else
-		StoreTempBanReason(ref, reason, expires)
+		StoreTempBanReason(ref, "", reason, expires)
 	end
 end, true)
 
@@ -257,10 +265,10 @@ RegisterCommand("unban", function(source, args, raw)
 end, true)
 
 RegisterCommand("listbans", function(source, args, raw)
-	exports.ghmattimysql:execute("SELECT id, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban", {}, function(results)
+	exports.ghmattimysql:execute("SELECT id, name, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban", {}, function(results)
 		if results then
 			for _, ban in ipairs(results) do
-				print(ban.id, ban.expires, ban.reason)
+				print(ban.id, ban.name, ban.expires, ban.reason)
 			end
 		end
 	end)
