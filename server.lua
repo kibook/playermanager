@@ -163,7 +163,7 @@ AddEventHandler("playerDropped", function(reason)
 end)
 
 AddEventHandler("playermanager:pong", function()
-	Log("Received pong from " .. source)
+	print("Received pong from " .. source)
 end)
 
 RegisterCommand("ban", function(source, args, raw)
