@@ -113,7 +113,7 @@ function ClearExpiredBans()
 end
 
 function Log(format, ...)
-	print(string.format("[%s] " .. format, os.date("%Y-%m-%dT%H:%M:%S"), ...))
+	print(string.format(format, ...))
 end
 
 AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
