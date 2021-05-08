@@ -75,7 +75,7 @@ function StoreTempBanReason(license, name, reason, expires)
 					})
 			else
 				exports.ghmattimysql:execute(
-					"INSERT INTO ban (id, name, reason, expires) VALUES (@id, @reason, @expires)",
+					"INSERT INTO ban (id, name, reason, expires) VALUES (@id, @name, @reason, @expires)",
 					{
 						["id"] = license,
 						["name"] = name,
