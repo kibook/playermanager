@@ -1,6 +1,8 @@
+local dbReady = false
+
 RegisterNetEvent("playermanager:pong")
 
-function GetIdentifier(id, kind)
+local function getIdentifier(id, kind)
 	local prefix = kind .. ":"
 
 	for _, identifier in ipairs(GetPlayerIdentifiers(id)) do
@@ -12,7 +14,7 @@ function GetIdentifier(id, kind)
 	return nil
 end
 
-function GetPlayerId(id)
+local function getPlayerId(id)
 	local players = GetPlayers()
 
 	for _, playerId in ipairs(players) do
@@ -32,25 +34,41 @@ function GetPlayerId(id)
 	return nil
 end
 
-function StoreBanReason(license, name, reason)
-	exports.ghmattimysql:scalar(
-		"SELECT id FROM ban WHERE id = @id",
+local function sqlScalar(...)
+	if not dbReady then
+		return
+	end
+
+	exports.ghmattimysql:scalar(...)
+end
+
+local function sqlExecute(...)
+	if not dbReady then
+		return
+	end
+
+	exports.ghmattimysql:execute(...)
+end
+
+local function storeBanReason(identifier, name, reason)
+	sqlScalar(
+		"SELECT id FROM ban WHERE identifier = @identifier",
 		{
-			["id"] = license
+			["identifier"] = identifier
 		},
 		function(id)
 			if id then
-				exports.ghmattimysql:execute(
+				sqlExecute(
 					"UPDATE ban SET reason = @reason WHERE id = @id",
 					{
 						["reason"] = reason,
 						["id"] = id
 					})
 			else
-				exports.ghmattimysql:execute(
-					"INSERT INTO ban (id, name, reason) VALUES (@id, @name, @reason)",
+				sqlExecute(
+					"INSERT INTO ban (identifier, name, reason) VALUES (@identifier, @name, @reason)",
 					{
-						["id"] = license,
+						["identifier"] = identifier,
 						["name"] = name,
 						["reason"] = reason
 					})
@@ -58,15 +76,15 @@ function StoreBanReason(license, name, reason)
 		end)
 end
 
-function StoreTempBanReason(license, name, reason, expires)
-	exports.ghmattimysql:scalar(
-		"SELECT id FROM ban WHERE id = @id",
+local function storeTempBanReason(identifier, name, reason, expires)
+	sqlScalar(
+		"SELECT id FROM ban WHERE identifier = @identifier",
 		{
-			["id"] = license
+			["identifier"] = identifier
 		},
 		function(id)
 			if id then
-				exports.ghmattimysql:execute(
+				sqlExecute(
 					"UPDATE ban SET reason = @reason, expires = @expires WHERE id = @id",
 					{
 						["reason"] = reason,
@@ -74,10 +92,10 @@ function StoreTempBanReason(license, name, reason, expires)
 						["id"] = id
 					})
 			else
-				exports.ghmattimysql:execute(
-					"INSERT INTO ban (id, name, reason, expires) VALUES (@id, @name, @reason, @expires)",
+				sqlExecute(
+					"INSERT INTO ban (identifier, name, reason, expires) VALUES (@identifier, @name, @reason, @expires)",
 					{
-						["id"] = license,
+						["identifier"] = identifier,
 						["name"] = name,
 						["reason"] = reason,
 						["expires"] = expires
@@ -86,14 +104,14 @@ function StoreTempBanReason(license, name, reason, expires)
 		end)
 end
 
-function GetPlayersFromArgs(args)
+local function getPlayersFromArgs(args)
 	local players
 
 	if #args > 0 then
 		players = {}
 
 		for _, arg in ipairs(args) do
-			local id = GetPlayerId(arg)
+			local id = getPlayerId(arg)
 
 			if id then
 				table.insert(players, id)
@@ -110,20 +128,87 @@ function GetPlayersFromArgs(args)
 	return players
 end
 
-function ClearExpiredBans()
-	exports.ghmattimysql:execute("DELETE FROM ban WHERE expires < NOW()")
+local function clearExpiredBans()
+	sqlExecute("DELETE FROM ban WHERE expires < NOW()")
 end
 
-function Log(format, ...)
+local function log(format, ...)
 	print(string.format(format, ...))
 end
 
-AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
-	local player = source
-	local license = GetIdentifier(player, "license")
-	local ip = GetPlayerEndpoint(player)
+local function getMaxClients()
+	return GetConvarInt("sv_maxclients", 32)
+end
 
-	Log("Connecting: %s %s %s", name, license, ip)
+local queue = {
+	players = {}
+}
+
+function queue:push(player)
+	table.insert(self.players, player)
+end
+
+function queue:pop()
+	table.remove(self.players, 1)
+end
+
+function queue:getPosition(player)
+	for i = 1, #self.players do
+		if self.players[i] == player then
+			return i
+		end
+	end
+end
+
+function queue:getLength()
+	return #self.players
+end
+
+function queue:isFull()
+	if Config.queue.size then
+		return self:getLength() >= Config.queue.size
+	else
+		return false
+	end
+end
+
+local function enqueuePlayer(source, name, ip, deferrals)
+	deferrals.update("Checking queue...")
+
+	if queue:isFull() then
+		deferrals.done("The queue is currently full. Please try joining again later.")
+		log("Dropped: %s %s (Queue full)", name, ip)
+	else
+		queue:push(source)
+
+		while true do
+			local numPlayers = #GetPlayers()
+			local queuePos = queue:getPosition(source)
+
+			if not GetPlayerEndpoint(source) then
+				log("Dropped: %s %s (Left queue)", name, ip)
+				break
+			end
+
+			if numPlayers < getMaxClients() and queuePos <= 1 then
+				break
+			end
+
+			deferrals.update(("Queue position: %d/%d"):format(queuePos, queue:getLength()))
+
+			Citizen.Wait(1000)
+		end
+
+		queue:pop()
+	end
+end
+
+AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
+	local source = source
+	local identifier = getIdentifier(source, Config.dbIdentifier)
+	local ip = GetPlayerEndpoint(source)
+
+	log("Connecting: %s %s %s", name, identifier, ip)
 
 	deferrals.defer()
 
@@ -132,20 +217,20 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 	deferrals.update("Checking players...")
 
 	for _, player in ipairs(GetPlayers()) do
-		local playerLicense = GetIdentifier(player, "license")
+		local playerIdentifier = getIdentifier(player, Config.dbIdentifier)
 
-		if license == playerLicense then
+		if identifier == playerIdentifier then
 			deferrals.done("You are already connected to this server. If you are reconnecting, please wait one minute and try again. To prevent this in the future, quit the game by pressing F8 and selecting Quit instead of using the pause menu.")
-			Log("Dropped: %s %s (Already connected): Already connected", GetPlayerName(player), GetPlayerEndpoint(player))
+			log("Dropped: %s %s (Already connected): Already connected", name, ip)
 		end
 	end
 
 	deferrals.update("Checking bans...")
 
-	exports.ghmattimysql:execute(
-		"SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban WHERE id = @id",
+	sqlExecute(
+		"SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban WHERE identifier = @identifier",
 		{
-			["id"] = license
+			["identifier"] = identifier
 		},
 		function(results)
 			Citizen.Wait(0)
@@ -164,15 +249,24 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 
 				deferrals.done(message)
 
-				Log(message)
+				log("Dropped: %s %s (%s)", name, ip, message)
 			else
+				if Config.queue.enabled then
+					enqueuePlayer(source, name, ip, deferrals)
+				elseif #GetPlayers() >= getMaxClients() then
+					deferrals.done("The server is currently full. Please try joining again later.")
+					log("Dropped: %s %s (Server full)")
+				end
+
+				deferrals.update("Now entering the server...")
+
 				deferrals.done()
 			end
 		end)
 end)
 
 AddEventHandler("playerDropped", function(reason)
-	Log("Dropped: %s %s (%s)", GetPlayerName(source), GetPlayerEndpoint(source), reason)
+	log("Dropped: %s %s (%s)", GetPlayerName(source), GetPlayerEndpoint(source), reason)
 end)
 
 AddEventHandler("playermanager:pong", function()
@@ -187,20 +281,20 @@ RegisterCommand("ban", function(source, args, raw)
 
 	local ref = args[1]
 
-	local id = GetPlayerId(ref)
+	local id = getPlayerId(ref)
 
 	table.remove(args, 1)
 	local reason = table.concat(args, " ")
 
 	if id then
-		local license = GetIdentifier(id, "license")
+		local identifier = getIdentifier(id, Config.dbIdentifier)
 		local name = GetPlayerName(id)
 
-		StoreBanReason(license, name, reason)
+		storeBanReason(identifier, name, reason)
 
 		DropPlayer(id, "Banned: " .. reason)
 	else
-		StoreBanReason(ref, "", reason)
+		storeBanReason(ref, "", reason)
 	end
 end, true)
 
@@ -213,21 +307,21 @@ RegisterCommand("tempban", function(source, args, raw)
 	local ref = args[1]
 	local expires = args[2]
 
-	local id = GetPlayerId(ref)
+	local id = getPlayerId(ref)
 
 	table.remove(args, 1)
 	table.remove(args, 1)
 	local reason = table.concat(args, " ")
 
 	if id then
-		local license = GetIdentifier(id, "license")
+		local identifier = getIdentifier(id, Config.dbIdentifier)
 		local name = GetPlayerName(id)
 
-		StoreTempBanReason(license, name, reason, expires)
+		storeTempBanReason(identifier, name, reason, expires)
 
 		DropPlayer(id, "Banned until " .. expires .. ": " .. reason)
 	else
-		StoreTempBanReason(ref, "", reason, expires)
+		storeTempBanReason(ref, "", reason, expires)
 	end
 end, true)
 
@@ -242,7 +336,7 @@ RegisterCommand("kick", function(source, args, raw)
 	table.remove(args, 1)
 	local reason = table.concat(args, " ")
 
-	local id = GetPlayerId(ref)
+	local id = getPlayerId(ref)
 
 	if id then
 		DropPlayer(id, "Kicked: " .. reason)
@@ -266,35 +360,35 @@ end, true)
 
 RegisterCommand("unban", function(source, args, raw)
 	if #args < 1 then
-		print("You must specify a license to unban")
+		print("You must specify an identifier to unban")
 		return
 	end
 
-	local license = args[1]
+	local identifier = args[1]
 
-	exports.ghmattimysql:execute("DELETE FROM ban WHERE id = @id", {
-		["id"] = license
+	sqlExecute("DELETE FROM ban WHERE identifier = @identifier", {
+		["identifier"] = identifier
 	})
 end, true)
 
 RegisterCommand("listbans", function(source, args, raw)
-	exports.ghmattimysql:execute("SELECT id, name, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban", {}, function(results)
+	sqlExecute("SELECT identifier, name, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban", {}, function(results)
 		if results then
 			for _, ban in ipairs(results) do
-				print(ban.id, ban.name, ban.expires, ban.reason)
+				print(ban.identifier, ban.name, ban.expires, ban.reason)
 			end
 		end
 	end)
 end, true)
 
 RegisterCommand("status", function(source, args, raw)
-	for _, id in ipairs(GetPlayersFromArgs(args)) do
-		print(string.format("[%d] %s %s %s %d", id, GetPlayerName(id), GetIdentifier(id, "license"), GetPlayerEndpoint(id), GetPlayerPing(id)))
+	for _, id in ipairs(getPlayersFromArgs(args)) do
+		print(string.format("[%d] %s %s %s %d", id, GetPlayerName(id), getIdentifier(id, Config.dbIdentifier), GetPlayerEndpoint(id), GetPlayerPing(id)))
 	end
 end, true)
 
 RegisterCommand("ping", function(source, args, raw)
-	for _, player in ipairs(GetPlayersFromArgs(args)) do
+	for _, player in ipairs(getPlayersFromArgs(args)) do
 		TriggerClientEvent("playermanager:ping", player)
 		print("Sent ping to " .. player)
 	end
@@ -302,7 +396,7 @@ end, true)
 
 RegisterCommand("spectate", function(source, args, raw)
 	if #args > 0 then
-		local id = GetPlayerId(args[1])
+		local id = getPlayerId(args[1])
 
 		if id then
 			TriggerClientEvent("playermanager:spectate", source, id)
@@ -315,7 +409,7 @@ RegisterCommand("spectate", function(source, args, raw)
 end, true)
 
 RegisterCommand("summon", function(source, args, raw)
-	for _, player in ipairs(GetPlayersFromArgs(args)) do
+	for _, player in ipairs(getPlayersFromArgs(args)) do
 		if player ~= source then
 			TriggerClientEvent("playermanager:summon", player, source)
 		end
@@ -324,7 +418,26 @@ end, true)
 
 Citizen.CreateThread(function()
 	while true do
-		ClearExpiredBans()
+		clearExpiredBans()
 		Citizen.Wait(60000)
 	end
 end)
+
+exports.ghmattimysql:execute(
+	[[
+	CREATE TABLE IF NOT EXISTS ban (
+		id INT AUTO_INCREMENT NOT NULL,
+		identifier VARCHAR(255) NOT NULL,
+		name VARCHAR(255) NOT NULL,
+		reason VARCHAR(255) NOT NULL,
+		expires DATETIME,
+		PRIMARY KEY (id)
+	)
+	]],
+	{},
+	function(success)
+		if success then
+			dbReady = true
+			log("successfully connected to DB")
+		end
+	end)
