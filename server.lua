@@ -48,7 +48,7 @@ function StoreBanReason(license, name, reason)
 					})
 			else
 				exports.ghmattimysql:execute(
-					"INSERT INTO ban (id, name, reason) VALUES (@id, @reason)",
+					"INSERT INTO ban (id, name, reason) VALUES (@id, @name, @reason)",
 					{
 						["id"] = license,
 						["name"] = name,
@@ -105,6 +105,8 @@ function GetPlayersFromArgs(args)
 		players = GetPlayers()
 	end
 
+	table.sort(players)
+
 	return players
 end
 
@@ -125,7 +127,18 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 
 	deferrals.defer()
 
-	Wait(0)
+	Citizen.Wait(0)
+
+	deferrals.update("Checking players...")
+
+	for _, player in ipairs(GetPlayers()) do
+		local playerLicense = GetIdentifier(player, "license")
+
+		if license == playerLicense then
+			deferrals.done("You are already connected to this server. If you are reconnecting, please wait one minute and try again. To prevent this in the future, quit the game by pressing F8 and selecting Quit instead of using the pause menu.")
+			Log("Dropped: %s %s (Already connected): Already connected", GetPlayerName(player), GetPlayerEndpoint(player))
+		end
+	end
 
 	deferrals.update("Checking bans...")
 
@@ -135,7 +148,7 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 			["id"] = license
 		},
 		function(results)
-			Wait(0)
+			Citizen.Wait(0)
 
 			if results and results[1] then
 				local banReason = results[1].reason
@@ -309,9 +322,9 @@ RegisterCommand("summon", function(source, args, raw)
 	end
 end, true)
 
-CreateThread(function()
+Citizen.CreateThread(function()
 	while true do
 		ClearExpiredBans()
-		Wait(30000)
+		Citizen.Wait(60000)
 	end
 end)
