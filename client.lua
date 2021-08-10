@@ -2,6 +2,14 @@ RegisterNetEvent("playermanager:ping")
 RegisterNetEvent("playermanager:spectate")
 RegisterNetEvent("playermanager:summon")
 
+local function getTeleportTarget()
+	local ped = PlayerPedId()
+	local veh = GetVehiclePedIsIn(ped, false)
+	local mnt = GetMount(ped)
+
+	return (veh == 0 and (mnt == 0 and ped or mnt) or veh)
+end
+
 AddEventHandler("playermanager:ping", function()
 	TriggerServerEvent("playermanager:pong")
 end)
@@ -15,10 +23,10 @@ AddEventHandler("playermanager:spectate", function(serverId)
 end)
 
 AddEventHandler("playermanager:summon", function(serverId)
-	SetEntityCoords(PlayerPedId(), GetEntityCoords(GetPlayerPed(GetPlayerFromServerId(serverId))))
+	SetEntityCoords(getTeleportTarget(), GetEntityCoords(GetPlayerPed(GetPlayerFromServerId(serverId))))
 end)
 
-CreateThread(function()
+Citizen.CreateThread(function()
 	TriggerEvent("chat:addSuggestion", "/ban", "Ban a player", {
 		{name = "player", help = "Player name or ID"},
 		{name = "reason", help = "Reason for banning"}
