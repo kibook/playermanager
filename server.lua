@@ -52,21 +52,21 @@ end
 
 local function storeBanReason(identifier, name, reason)
 	sqlScalar(
-		"SELECT id FROM ban WHERE identifier = @identifier",
+		"SELECT id FROM playermanager_ban WHERE identifier = @identifier",
 		{
 			["identifier"] = identifier
 		},
 		function(id)
 			if id then
 				sqlExecute(
-					"UPDATE ban SET reason = @reason WHERE id = @id",
+					"UPDATE playermanager_ban SET reason = @reason WHERE id = @id",
 					{
 						["reason"] = reason,
 						["id"] = id
 					})
 			else
 				sqlExecute(
-					"INSERT INTO ban (identifier, name, reason) VALUES (@identifier, @name, @reason)",
+					"INSERT INTO playermanager_ban (identifier, name, reason) VALUES (@identifier, @name, @reason)",
 					{
 						["identifier"] = identifier,
 						["name"] = name,
@@ -78,14 +78,14 @@ end
 
 local function storeTempBanReason(identifier, name, reason, expires)
 	sqlScalar(
-		"SELECT id FROM ban WHERE identifier = @identifier",
+		"SELECT id FROM playermanager_ban WHERE identifier = @identifier",
 		{
 			["identifier"] = identifier
 		},
 		function(id)
 			if id then
 				sqlExecute(
-					"UPDATE ban SET reason = @reason, expires = @expires WHERE id = @id",
+					"UPDATE playermanager_ban SET reason = @reason, expires = @expires WHERE id = @id",
 					{
 						["reason"] = reason,
 						["expires"] = expires,
@@ -93,7 +93,7 @@ local function storeTempBanReason(identifier, name, reason, expires)
 					})
 			else
 				sqlExecute(
-					"INSERT INTO ban (identifier, name, reason, expires) VALUES (@identifier, @name, @reason, @expires)",
+					"INSERT INTO playermanager_ban (identifier, name, reason, expires) VALUES (@identifier, @name, @reason, @expires)",
 					{
 						["identifier"] = identifier,
 						["name"] = name,
@@ -129,7 +129,7 @@ local function getPlayersFromArgs(args)
 end
 
 local function clearExpiredBans()
-	sqlExecute("DELETE FROM ban WHERE expires < NOW()")
+	sqlExecute("DELETE FROM playermanager_ban WHERE expires < NOW()")
 end
 
 local function log(format, ...)
@@ -138,6 +138,12 @@ end
 
 local function getMaxClients()
 	return GetConvarInt("sv_maxclients", 32)
+end
+
+local function unban(identifier)
+	sqlExecute("DELETE FROM playermanager_ban WHERE identifier = @identifier", {
+		["identifier"] = identifier
+	})
 end
 
 local queue = {
@@ -228,7 +234,7 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 	deferrals.update("Checking bans...")
 
 	sqlExecute(
-		"SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban WHERE identifier = @identifier",
+		"SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM playermanager_ban WHERE identifier = @identifier",
 		{
 			["identifier"] = identifier
 		},
@@ -366,13 +372,11 @@ RegisterCommand("unban", function(source, args, raw)
 
 	local identifier = args[1]
 
-	sqlExecute("DELETE FROM ban WHERE identifier = @identifier", {
-		["identifier"] = identifier
-	})
+	unban(identifier)
 end, true)
 
 RegisterCommand("listbans", function(source, args, raw)
-	sqlExecute("SELECT identifier, name, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM ban", {}, function(results)
+	sqlExecute("SELECT identifier, name, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM playermanager_ban", {}, function(results)
 		if results then
 			for _, ban in ipairs(results) do
 				print(ban.identifier, ban.name, ban.expires, ban.reason)
@@ -425,7 +429,7 @@ end)
 
 exports.ghmattimysql:execute(
 	[[
-	CREATE TABLE IF NOT EXISTS ban (
+	CREATE TABLE IF NOT EXISTS playermanager_ban (
 		id INT AUTO_INCREMENT NOT NULL,
 		identifier VARCHAR(255) NOT NULL,
 		name VARCHAR(255) NOT NULL,
