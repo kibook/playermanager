@@ -1,5 +1,6 @@
 RegisterNetEvent("playermanager:ping")
 RegisterNetEvent("playermanager:spectate")
+RegisterNetEvent("playermanager:getSummonCoords")
 RegisterNetEvent("playermanager:summon")
 
 local function getTeleportTarget()
@@ -22,8 +23,12 @@ AddEventHandler("playermanager:spectate", function(serverId)
 	end
 end)
 
-AddEventHandler("playermanager:summon", function(serverId)
-	SetEntityCoords(getTeleportTarget(), GetEntityCoords(GetPlayerPed(GetPlayerFromServerId(serverId))))
+AddEventHandler("playermanager:getSummonCoords", function(players)
+	TriggerServerEvent("playermanager:summon", players, GetEntityCoords(PlayerPedId()))
+end)
+
+AddEventHandler("playermanager:summon", function(coords)
+	SetEntityCoords(getTeleportTarget(), coords)
 end)
 
 Citizen.CreateThread(function()

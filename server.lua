@@ -1,6 +1,7 @@
 local dbReady = false
 
 RegisterNetEvent("playermanager:pong")
+RegisterNetEvent("playermanager:summon")
 
 local function getIdentifier(id, kind)
 	local prefix = kind .. ":"
@@ -279,6 +280,12 @@ AddEventHandler("playermanager:pong", function()
 	print("Received pong from " .. source)
 end)
 
+AddEventHandler("playermanager:summon", function(players, coords)
+	for _, player in ipairs(players) do
+		TriggerClientEvent("playermanager:summon", player, coords)
+	end
+end)
+
 RegisterCommand("ban", function(source, args, raw)
 	if #args < 2 then
 		print("Usage: ban <player> <reason>")
@@ -413,11 +420,7 @@ RegisterCommand("spectate", function(source, args, raw)
 end, true)
 
 RegisterCommand("summon", function(source, args, raw)
-	for _, player in ipairs(getPlayersFromArgs(args)) do
-		if player ~= source then
-			TriggerClientEvent("playermanager:summon", player, source)
-		end
-	end
+	TriggerClientEvent("playermanager:getSummonCoords", source, getPlayersFromArgs(args))
 end, true)
 
 Citizen.CreateThread(function()
