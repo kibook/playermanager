@@ -368,7 +368,7 @@ RegisterCommand("kick", function(source, args, raw)
 	end
 end, true)
 
-RegisterCommand("kickall", function(source, args, raw)
+RegisterCommand("kick_all", function(source, args, raw)
 	if #args < 1 then
 		print("You must specify a reason")
 		return
@@ -392,7 +392,7 @@ RegisterCommand("unban", function(source, args, raw)
 	unban(identifier)
 end, true)
 
-RegisterCommand("listbans", function(source, args, raw)
+RegisterCommand("list_bans", function(source, args, raw)
 	getAllBans():next(function(bans)
 		for _, ban in ipairs(bans) do
 			print(ban.identifier, ban.name, ban.expires, ban.reason)

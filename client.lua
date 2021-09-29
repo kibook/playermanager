@@ -40,6 +40,10 @@ Citizen.CreateThread(function()
 		{name = "player", help = "Player name or ID"},
 		{name = "reason", help = "Reason for kicking"}
 	})
+	TriggerEvent("chat:addSuggestion", "/kick_all", "Kick all players", {
+		{name = "reason", help = "Reason for kicking"}
+	})
+	TriggerEvent("chat:addSuggestion", "/list_bans", "List banned players")
 	TriggerEvent("chat:addSuggestion", "/ping", "Test player connections", {
 		{name = "player", help = "Player name or ID. Multiple can be specified. Omit to ping all players."}
 	})
