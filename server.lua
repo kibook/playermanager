@@ -1,5 +1,3 @@
-local dbReady = false
-
 RegisterNetEvent("playermanager:pong")
 RegisterNetEvent("playermanager:summon")
 
@@ -35,74 +33,78 @@ local function getPlayerId(id)
 	return nil
 end
 
-local function sqlScalar(...)
-	if not dbReady then
-		return
-	end
+local sql = {}
 
-	exports.ghmattimysql:scalar(...)
+function sql.scalar(...)
+	local p = promise.new()
+
+	exports.ghmattimysql:scalar(..., function(result)
+		p:resolve(result)
+	end)
+
+	return p
 end
 
-local function sqlExecute(...)
-	if not dbReady then
-		return
-	end
+function sql.execute(...)
+	local p = promise.new()
 
-	exports.ghmattimysql:execute(...)
+	exports.ghmattimysql:execute(..., function(result)
+		if result then
+			p:resolve(result)
+		else
+			p:reject("Executing failed")
+		end
+	end)
+
+	return p
+end
+
+local function getBanId(identifier)
+	return sql.scalar("SELECT id FROM playermanager_log WHERE identifier = @identifier", {["identifier"] = identifier})
 end
 
 local function storeBanReason(identifier, name, reason)
-	sqlScalar(
-		"SELECT id FROM playermanager_ban WHERE identifier = @identifier",
-		{
-			["identifier"] = identifier
-		},
-		function(id)
-			if id then
-				sqlExecute(
-					"UPDATE playermanager_ban SET reason = @reason WHERE id = @id",
-					{
-						["reason"] = reason,
-						["id"] = id
-					})
-			else
-				sqlExecute(
-					"INSERT INTO playermanager_ban (identifier, name, reason) VALUES (@identifier, @name, @reason)",
-					{
-						["identifier"] = identifier,
-						["name"] = name,
-						["reason"] = reason
-					})
-			end
-		end)
+	return getBanId(identifier):next(function(id)
+		if id then
+			return sql.execute(
+				"UPDATE playermanager_ban SET reason = @reason WHERE id = @id",
+				{
+					["reason"] = reason,
+					["id"] = id
+				})
+		else
+			return sql.execute(
+				"INSERT INTO playermanager_ban (identifier, name, reason) VALUES (@identifier, @name, @reason)",
+				{
+					["identifier"] = identifier,
+					["name"] = name,
+					["reason"] = reason
+				})
+		end
+	end)
 end
 
 local function storeTempBanReason(identifier, name, reason, expires)
-	sqlScalar(
-		"SELECT id FROM playermanager_ban WHERE identifier = @identifier",
-		{
-			["identifier"] = identifier
-		},
-		function(id)
-			if id then
-				sqlExecute(
-					"UPDATE playermanager_ban SET reason = @reason, expires = @expires WHERE id = @id",
-					{
-						["reason"] = reason,
-						["expires"] = expires,
-						["id"] = id
-					})
-			else
-				sqlExecute(
-					"INSERT INTO playermanager_ban (identifier, name, reason, expires) VALUES (@identifier, @name, @reason, @expires)",
-					{
-						["identifier"] = identifier,
-						["name"] = name,
-						["reason"] = reason,
-						["expires"] = expires
-					})
-			end
-		end)
+	return getBanId(identifier):next(function(id)
+		if id then
+			return sql.execute(
+				"UPDATE playermanager_ban SET reason = @reason, expires = @expires WHERE id = @id",
+				{
+					["reason"] = reason,
+					["expires"] = expires,
+					["id"] = id
+				})
+		else
+			return sql.execute(
+				"INSERT INTO playermanager_ban (identifier, name, reason, expires) VALUES (@identifier, @name, @reason, @expires)",
+				{
+					["identifier"] = identifier,
+					["name"] = name,
+					["reason"] = reason,
+					["expires"] = expires
+				})
+		end
+	end)
 end
 
 local function getPlayersFromArgs(args)
@@ -130,7 +132,7 @@ local function getPlayersFromArgs(args)
 end
 
 local function clearExpiredBans()
-	sqlExecute("DELETE FROM playermanager_ban WHERE expires < NOW()")
+	return sql.execute("DELETE FROM playermanager_ban WHERE expires < NOW()")
 end
 
 local function log(format, ...)
@@ -142,7 +144,7 @@ local function getMaxClients()
 end
 
 local function unban(identifier)
-	sqlExecute("DELETE FROM playermanager_ban WHERE identifier = @identifier", {
+	return sql.execute("DELETE FROM playermanager_ban WHERE identifier = @identifier", {
 		["identifier"] = identifier
 	})
 end
@@ -182,6 +184,8 @@ end
 local function enqueuePlayer(source, name, ip, deferrals)
 	deferrals.update("Checking queue...")
 
+	Citizen.Wait(0)
+
 	if queue:isFull() then
 		deferrals.done("The queue is currently full. Please try joining again later.")
 		log("Dropped: %s %s (Queue full)", name, ip)
@@ -210,6 +214,16 @@ local function enqueuePlayer(source, name, ip, deferrals)
 	end
 end
 
+local function getBan(identifier)
+	return sql.execute("SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM playermanager_ban WHERE identifier = @identifier", {["identifier"] = identifier}):next(function(results)
+		return results[1]
+	end)
+end
+
+local function getAllBans()
+	return sql.execute("SELECT identifier, name, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM playermanager_ban")
+end
+
 AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 	local source = source
 	local identifier = getIdentifier(source, Config.dbIdentifier)
@@ -232,44 +246,40 @@ AddEventHandler("playerConnecting", function(name, setKickReason, deferrals)
 		end
 	end
 
+	Citizen.Wait(0)
+
 	deferrals.update("Checking bans...")
 
-	sqlExecute(
-		"SELECT reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM playermanager_ban WHERE identifier = @identifier",
-		{
-			["identifier"] = identifier
-		},
-		function(results)
+	Citizen.Wait(0)
+
+	getBan(identifier):next(function(ban)
+		if ban then
+			local message
+
+			if ban.expires then
+				message = string.format("Banned until %s: %s", ban.expires, ban.reason)
+			else
+				message = string.format("Banned: %s", ban.reason)
+			end
+
+			deferrals.done(message)
+
+			log("Dropped: %s %s (%s)", name, ip, message)
+		else
+			if Config.queue.enabled then
+				enqueuePlayer(source, name, ip, deferrals)
+			elseif #GetPlayers() >= getMaxClients() then
+				deferrals.done("The server is currently full. Please try joining again later.")
+				log("Dropped: %s %s (Server full)")
+			end
+
+			deferrals.update("Now entering the server...")
+
 			Citizen.Wait(0)
 
-			if results and results[1] then
-				local banReason = results[1].reason
-				local expires = results[1].expires
-
-				local message
-
-				if expires then
-					message = string.format("Banned until %s: %s", expires, banReason)
-				else
-					message = string.format("Banned: %s", banReason)
-				end
-
-				deferrals.done(message)
-
-				log("Dropped: %s %s (%s)", name, ip, message)
-			else
-				if Config.queue.enabled then
-					enqueuePlayer(source, name, ip, deferrals)
-				elseif #GetPlayers() >= getMaxClients() then
-					deferrals.done("The server is currently full. Please try joining again later.")
-					log("Dropped: %s %s (Server full)")
-				end
-
-				deferrals.update("Now entering the server...")
-
-				deferrals.done()
-			end
-		end)
+			deferrals.done()
+		end
+	end)
 end)
 
 AddEventHandler("playerDropped", function(reason)
@@ -383,11 +393,9 @@ RegisterCommand("unban", function(source, args, raw)
 end, true)
 
 RegisterCommand("listbans", function(source, args, raw)
-	sqlExecute("SELECT identifier, name, reason, DATE_FORMAT(expires, '%Y-%m-%d %H:%i:%s') as expires FROM playermanager_ban", {}, function(results)
-		if results then
-			for _, ban in ipairs(results) do
-				print(ban.identifier, ban.name, ban.expires, ban.reason)
-			end
+	getAllBans():next(function(bans)
+		for _, ban in ipairs(bans) do
+			print(ban.identifier, ban.name, ban.expires, ban.reason)
 		end
 	end)
 end, true)
@@ -430,7 +438,7 @@ Citizen.CreateThread(function()
 	end
 end)
 
-exports.ghmattimysql:execute(
+sql.transaction {
 	[[
 	CREATE TABLE IF NOT EXISTS playermanager_ban (
 		id INT AUTO_INCREMENT NOT NULL,
@@ -440,11 +448,11 @@ exports.ghmattimysql:execute(
 		expires DATETIME,
 		PRIMARY KEY (id)
 	)
-	]],
-	{},
-	function(success)
-		if success then
-			dbReady = true
-			log("successfully connected to DB")
-		end
-	end)
+	]]
+}:next(function(success)
+	if success then
+		log("Successfully connected to DB")
+	else
+		log("Failed to connect to DB")
+	end
+end)
