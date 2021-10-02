@@ -59,6 +59,20 @@ function sql.execute(...)
 	return p
 end
 
+function sql.transaction(...)
+	local p = promise.new()
+
+	exports.ghmattimysql:transaction(..., function(success)
+		if success then
+			p:resolve()
+		else
+			p:reject("Transaction failed")
+		end
+	end)
+
+	return p
+end
+
 local function getBanId(identifier)
 	return sql.scalar("SELECT id FROM playermanager_log WHERE identifier = @identifier", {["identifier"] = identifier})
 end
@@ -449,10 +463,8 @@ sql.transaction {
 		PRIMARY KEY (id)
 	)
 	]]
-}:next(function(success)
-	if success then
-		log("Successfully connected to DB")
-	else
-		log("Failed to connect to DB")
-	end
+}:next(function()
+	log("Successfully connected to DB")
+end, function(err)
+	log("Failed to connect to DB")
 end)
