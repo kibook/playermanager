@@ -74,7 +74,7 @@ function sql.transaction(query, params)
 end
 
 local function getBanId(identifier)
-	return sql.scalar("SELECT id FROM playermanager_log WHERE identifier = @identifier", {["identifier"] = identifier})
+	return sql.scalar("SELECT id FROM playermanager_ban WHERE identifier = @identifier", {["identifier"] = identifier})
 end
 
 local function storeBanReason(identifier, name, reason)
