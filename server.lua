@@ -38,7 +38,7 @@ local sql = {}
 function sql.scalar(query, params)
 	local p = promise.new()
 
-	exports.ghmattimysql:scalar(query, params, function(result)
+	exports.oxmysql:scalar(query, params, function(result)
 		p:resolve(result)
 	end)
 
@@ -48,7 +48,7 @@ end
 function sql.execute(query, params)
 	local p = promise.new()
 
-	exports.ghmattimysql:execute(query, params, function(result)
+	exports.oxmysql:execute(query, params, function(result)
 		if result then
 			p:resolve(result)
 		else
@@ -62,7 +62,7 @@ end
 function sql.transaction(query, params)
 	local p = promise.new()
 
-	exports.ghmattimysql:transaction(query, params, function(success)
+	exports.oxmysql:transaction(query, params, function(success)
 		if success then
 			p:resolve()
 		else
